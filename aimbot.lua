@@ -1,6 +1,7 @@
--- // pthub v2.9.1
--- // Adaptive FullBright + Fly-To TP + FPS Boost + Combat + Refresh Players
+-- // pthub v2.9.3
+-- // Adaptive FullBright + Fly-To TP + FPS Boost + Combat + Refresh Players + INVISIBLE (MENU)
 -- // LocalScript / Executor | RightShift = toggle menu
+-- // INVISIBLE = Visuals tab → "👻 INVISIBLE / GHOST"
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
@@ -13,9 +14,8 @@ local LocalPlayer = Players.LocalPlayer
 local Camera = workspace.CurrentCamera
 local GameSettings = UserSettings():GetService("UserGameSettings")
 
--- // CONFIGURATION
 local CONFIG = {
-    Version = "2.9.1",
+    Version = "2.9.3",
     MainColor = Color3.fromHex("#0d0d1a"),
     AccentPurple = Color3.fromHex("#6c5ce7"),
     AccentTeal = Color3.fromHex("#00cec9"),
@@ -30,10 +30,14 @@ local CONFIG = {
     TeleportOffset = Vector3.new(3.5, 3, 0),
     FlyToArriveDist = 4.5,
     AutoRefreshPlayers = true,
-    AutoRefreshInterval = 3, -- seconds
+    AutoRefreshInterval = 3,
+    InvisibleLocalOnly = true,
+    InvisibleHideShadow = true,
+    InvisibleHideNameTag = true,
+    InvisibleReapplyRate = 0.15,
+    InvisibleKeepTools = false,
 }
 
--- // STATE
 local State = {
     SpeedEnabled = true, WalkSpeed = 16, SpeedBoostMult = 1,
     UseCFrameSpeed = false, CFrameSpeedValue = 2,
@@ -48,6 +52,10 @@ local State = {
     FullBrightEnabled = false,
     FullBrightIntensity = 55,
     FPSBoostEnabled = false,
+
+    InvisibleEnabled = false,
+    InvisibleSaved = {},
+    InvisibleNameTagHidden = false,
 
     TeleportSpeed = 120,
     TeleportStyle = "FlyTo",
@@ -67,13 +75,11 @@ local State = {
     FB_CC = nil,
     SceneDarkness = 0.5,
 
-    -- player list
     LastPlayerCount = 0,
     PlayerCountLabel = nil,
     RefreshStatusLabel = nil,
 }
 
--- // UTILITIES
 local function SafePcall(fn, ...)
     local ok, res = pcall(fn, ...)
     return ok, res
@@ -142,6 +148,168 @@ local function RefreshCharacter()
 end
 
 -- =========================================================
+-- INVISIBLE ENGINE
+-- =========================================================
+local function IsInvisibleTarget(inst)
+    if not inst then return false end
+    if inst:IsA("BasePart") or inst:IsA("MeshPart") then return true end
+    if inst:IsA("Decal") or inst:IsA("Texture") then return true end
+    if inst:IsA("Accessory") then return true end
+    if inst:IsA("Tool") and not CONFIG.InvisibleKeepTools then return true end
+    if inst:IsA("Shirt") or inst:IsA("Pants") or inst:IsA("ShirtGraphic") then return true end
+    if inst:IsA("CharacterMesh") then return true end
+    if inst:IsA("ParticleEmitter") or inst:IsA("Trail") or inst:IsA("Beam") then return true end
+    if inst:IsA("Fire") or inst:IsA("Smoke") or inst:IsA("Sparkles") then return true end
+    return false
+end
+
+local function CacheOriginal(inst)
+    if State.InvisibleSaved[inst] then return end
+    local entry = {}
+    if inst:IsA("BasePart") then
+        entry.Transparency = inst.Transparency
+        entry.LocalTransparencyModifier = inst.LocalTransparencyModifier
+        entry.CastShadow = inst.CastShadow
+    elseif inst:IsA("Decal") or inst:IsA("Texture") then
+        entry.Transparency = inst.Transparency
+    elseif inst:IsA("ParticleEmitter") or inst:IsA("Trail") or inst:IsA("Beam")
+        or inst:IsA("Fire") or inst:IsA("Smoke") or inst:IsA("Sparkles") then
+        entry.Enabled = inst.Enabled
+    end
+    State.InvisibleSaved[inst] = entry
+end
+
+local function ForceGhost(inst)
+    if not inst or not inst.Parent then return end
+    CacheOriginal(inst)
+    SafePcall(function()
+        if inst:IsA("BasePart") then
+            inst.LocalTransparencyModifier = 1
+            if not CONFIG.InvisibleLocalOnly then
+                inst.Transparency = 1
+            end
+            if CONFIG.InvisibleHideShadow then
+                inst.CastShadow = false
+            end
+        elseif inst:IsA("Decal") or inst:IsA("Texture") then
+            inst.Transparency = 1
+        elseif inst:IsA("ParticleEmitter") or inst:IsA("Trail") or inst:IsA("Beam")
+            or inst:IsA("Fire") or inst:IsA("Smoke") or inst:IsA("Sparkles") then
+            inst.Enabled = false
+        end
+    end)
+end
+
+local function RestoreOne(inst, entry)
+    if not inst or not inst.Parent or not entry then return end
+    SafePcall(function()
+        if inst:IsA("BasePart") then
+            if entry.LocalTransparencyModifier ~= nil then inst.LocalTransparencyModifier = entry.LocalTransparencyModifier end
+            if entry.Transparency ~= nil then inst.Transparency = entry.Transparency end
+            if entry.CastShadow ~= nil then inst.CastShadow = entry.CastShadow end
+        elseif inst:IsA("Decal") or inst:IsA("Texture") then
+            if entry.Transparency ~= nil then inst.Transparency = entry.Transparency end
+        elseif inst:IsA("ParticleEmitter") or inst:IsA("Trail") or inst:IsA("Beam")
+            or inst:IsA("Fire") or inst:IsA("Smoke") or inst:IsA("Sparkles") then
+            if entry.Enabled ~= nil then inst.Enabled = entry.Enabled end
+        end
+    end)
+end
+
+local function SweepCharacterInvisible(char)
+    if not char then return end
+    for _, inst in ipairs(char:GetDescendants()) do
+        if IsInvisibleTarget(inst) then ForceGhost(inst) end
+    end
+    for _, name in ipairs({"HumanoidRootPart", "Head", "Torso", "UpperTorso", "LowerTorso"}) do
+        local p = char:FindFirstChild(name)
+        if p and p:IsA("BasePart") then ForceGhost(p) end
+    end
+end
+
+local function HideNameTag(hum)
+    if not hum or not CONFIG.InvisibleHideNameTag then return end
+    SafePcall(function()
+        hum.NameDisplayDistance = 0
+        hum.HealthDisplayDistance = 0
+        hum.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.None
+        State.InvisibleNameTagHidden = true
+    end)
+end
+
+local function RestoreNameTag(hum)
+    if not hum then return end
+    SafePcall(function()
+        hum.NameDisplayDistance = 100
+        hum.HealthDisplayDistance = 100
+        hum.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.Viewer
+        State.InvisibleNameTagHidden = false
+    end)
+end
+
+function StartInvisible()
+    RefreshCharacter()
+    local char, hum = State.Character, State.Humanoid
+    if not char then return end
+
+    State.InvisibleEnabled = true
+    State.InvisibleSaved = {}
+    SweepCharacterInvisible(char)
+    if hum then HideNameTag(hum) end
+
+    if State.Connections.InvisibleAdded then State.Connections.InvisibleAdded:Disconnect() end
+    State.Connections.InvisibleAdded = char.DescendantAdded:Connect(function(inst)
+        if not State.InvisibleEnabled then return end
+        task.defer(function()
+            if IsInvisibleTarget(inst) then ForceGhost(inst) end
+            if inst:IsA("Accessory") then
+                task.wait(0.05)
+                for _, d in ipairs(inst:GetDescendants()) do
+                    if IsInvisibleTarget(d) then ForceGhost(d) end
+                end
+            end
+        end)
+    end)
+
+    if State.Connections.InvisibleLoop then State.Connections.InvisibleLoop:Disconnect() end
+    local acc = 0
+    State.Connections.InvisibleLoop = RunService.RenderStepped:Connect(function(dt)
+        if not State.InvisibleEnabled then return end
+        acc += dt
+        if acc < CONFIG.InvisibleReapplyRate then return end
+        acc = 0
+        local c, h = GetCharacter()
+        if not c then return end
+        SweepCharacterInvisible(c)
+        if h then HideNameTag(h) end
+    end)
+
+    if State.Connections.InvisibleTool then State.Connections.InvisibleTool:Disconnect() end
+    if hum then
+        State.Connections.InvisibleTool = hum.ChildAdded:Connect(function()
+            if State.InvisibleEnabled then
+                task.defer(function() SweepCharacterInvisible(char) end)
+            end
+        end)
+    end
+end
+
+function StopInvisible()
+    State.InvisibleEnabled = false
+    if State.Connections.InvisibleAdded then State.Connections.InvisibleAdded:Disconnect() State.Connections.InvisibleAdded = nil end
+    if State.Connections.InvisibleLoop then State.Connections.InvisibleLoop:Disconnect() State.Connections.InvisibleLoop = nil end
+    if State.Connections.InvisibleTool then State.Connections.InvisibleTool:Disconnect() State.Connections.InvisibleTool = nil end
+    for inst, entry in pairs(State.InvisibleSaved) do RestoreOne(inst, entry) end
+    State.InvisibleSaved = {}
+    local _, hum = GetCharacter()
+    if hum then RestoreNameTag(hum) end
+end
+
+local function SetInvisible(on)
+    if on then StartInvisible() else StopInvisible() end
+end
+
+-- =========================================================
 -- ADAPTIVE FULL BRIGHT
 -- =========================================================
 local function Luma(c)
@@ -155,13 +323,11 @@ local function SampleSceneDarkness()
     local fogFactor = 0
     if Lighting.FogEnd < 200 then fogFactor = 0.55
     elseif Lighting.FogEnd < 600 then fogFactor = 0.35
-    elseif Lighting.FogEnd < 1500 then fogFactor = 0.18
-    end
+    elseif Lighting.FogEnd < 1500 then fogFactor = 0.18 end
     local clock = Lighting.ClockTime
     local night = 0
     if clock < 6 or clock > 18.5 then night = 0.45
-    elseif clock < 7.5 or clock > 17 then night = 0.2
-    end
+    elseif clock < 7.5 or clock > 17 then night = 0.2 end
     local lightScore = (amb * 0.35 + out * 0.35 + br * 0.3)
     local darkness = math.clamp((1 - lightScore) * 0.75 + fogFactor + night * 0.5, 0, 1)
     State.SceneDarkness = darkness
@@ -170,17 +336,11 @@ end
 
 local function CaptureLighting()
     State.SavedLighting = {
-        Brightness = Lighting.Brightness,
-        ClockTime = Lighting.ClockTime,
-        FogEnd = Lighting.FogEnd,
-        FogStart = Lighting.FogStart,
-        FogColor = Lighting.FogColor,
-        GlobalShadows = Lighting.GlobalShadows,
-        OutdoorAmbient = Lighting.OutdoorAmbient,
-        Ambient = Lighting.Ambient,
-        ColorShift_Top = Lighting.ColorShift_Top,
-        ColorShift_Bottom = Lighting.ColorShift_Bottom,
-        ExposureCompensation = Lighting.ExposureCompensation,
+        Brightness = Lighting.Brightness, ClockTime = Lighting.ClockTime,
+        FogEnd = Lighting.FogEnd, FogStart = Lighting.FogStart, FogColor = Lighting.FogColor,
+        GlobalShadows = Lighting.GlobalShadows, OutdoorAmbient = Lighting.OutdoorAmbient,
+        Ambient = Lighting.Ambient, ColorShift_Top = Lighting.ColorShift_Top,
+        ColorShift_Bottom = Lighting.ColorShift_Bottom, ExposureCompensation = Lighting.ExposureCompensation,
         EnvironmentDiffuseScale = Lighting.EnvironmentDiffuseScale,
         EnvironmentSpecularScale = Lighting.EnvironmentSpecularScale,
         ShadowSoftness = Lighting.ShadowSoftness,
@@ -193,24 +353,17 @@ local function CaptureLighting()
             local entry = {Instance = fx, Enabled = (not fx:IsA("Atmosphere")) and fx.Enabled or true, Props = {}}
             if fx:IsA("BlurEffect") then entry.Props.Size = fx.Size end
             if fx:IsA("ColorCorrectionEffect") then
-                entry.Props.Brightness = fx.Brightness
-                entry.Props.Contrast = fx.Contrast
-                entry.Props.Saturation = fx.Saturation
-                entry.Props.TintColor = fx.TintColor
+                entry.Props.Brightness = fx.Brightness; entry.Props.Contrast = fx.Contrast
+                entry.Props.Saturation = fx.Saturation; entry.Props.TintColor = fx.TintColor
             end
             if fx:IsA("BloomEffect") then
-                entry.Props.Intensity = fx.Intensity
-                entry.Props.Size = fx.Size
-                entry.Props.Threshold = fx.Threshold
+                entry.Props.Intensity = fx.Intensity; entry.Props.Size = fx.Size; entry.Props.Threshold = fx.Threshold
             end
             if fx:IsA("DepthOfFieldEffect") then
-                entry.Props.FarIntensity = fx.FarIntensity
-                entry.Props.NearIntensity = fx.NearIntensity
+                entry.Props.FarIntensity = fx.FarIntensity; entry.Props.NearIntensity = fx.NearIntensity
             end
             if fx:IsA("Atmosphere") then
-                entry.Props.Density = fx.Density
-                entry.Props.Haze = fx.Haze
-                entry.Props.Glare = fx.Glare
+                entry.Props.Density = fx.Density; entry.Props.Haze = fx.Haze; entry.Props.Glare = fx.Glare
             end
             table.insert(State.SavedPostFX, entry)
         end
@@ -240,38 +393,25 @@ local function ApplyAdaptiveFullBright()
 
         local targetBright = saved.Brightness + mix * (1.1 + dark * 1.2)
         targetBright = math.clamp(targetBright, saved.Brightness, 3.2)
-        if dark < 0.25 then
-            targetBright = saved.Brightness + mix * 0.25
-        end
+        if dark < 0.25 then targetBright = saved.Brightness + mix * 0.25 end
         Lighting.Brightness = targetBright
 
         local ambLift = mix * (0.15 + dark * 0.35)
         local function liftColor(c, amt)
-            return Color3.new(
-                math.clamp(c.R + amt, 0, 1),
-                math.clamp(c.G + amt, 0, 1),
-                math.clamp(c.B + amt, 0, 1)
-            )
+            return Color3.new(math.clamp(c.R + amt, 0, 1), math.clamp(c.G + amt, 0, 1), math.clamp(c.B + amt, 0, 1))
         end
         Lighting.Ambient = liftColor(saved.Ambient, ambLift * 0.85)
         Lighting.OutdoorAmbient = liftColor(saved.OutdoorAmbient, ambLift)
         Lighting.ExposureCompensation = saved.ExposureCompensation + mix * (0.15 + dark * 0.35)
 
         if saved.FogEnd < 2500 then
-            local fogTarget = saved.FogEnd + mix * (8000 + dark * 40000)
-            Lighting.FogEnd = math.clamp(fogTarget, saved.FogEnd, 200000)
+            Lighting.FogEnd = math.clamp(saved.FogEnd + mix * (8000 + dark * 40000), saved.FogEnd, 200000)
             Lighting.FogStart = math.max(0, saved.FogStart * (1 - mix * 0.8))
         end
 
-        if mix > 0.45 and dark > 0.35 then
-            Lighting.GlobalShadows = false
-        else
-            Lighting.GlobalShadows = saved.GlobalShadows
-        end
-
+        Lighting.GlobalShadows = (mix > 0.45 and dark > 0.35) and false or saved.GlobalShadows
         if dark > 0.55 and t > 0.4 then
-            local goal = 13.5
-            Lighting.ClockTime = saved.ClockTime + (goal - saved.ClockTime) * mix * 0.55
+            Lighting.ClockTime = saved.ClockTime + (13.5 - saved.ClockTime) * mix * 0.55
         else
             Lighting.ClockTime = saved.ClockTime
         end
@@ -281,15 +421,9 @@ local function ApplyAdaptiveFullBright()
                 fx.Density = math.max(0, (fx.Density or 0) * (1 - mix * 0.7))
                 fx.Haze = math.max(0, (fx.Haze or 0) * (1 - mix * 0.7))
             end
-            if fx:IsA("BloomEffect") and mix > 0.6 then
-                fx.Intensity = math.min(fx.Intensity, 0.4)
-            end
-            if fx:IsA("DepthOfFieldEffect") and mix > 0.5 then
-                fx.Enabled = false
-            end
-            if fx:IsA("BlurEffect") and mix > 0.5 then
-                fx.Size = math.min(fx.Size, 2)
-            end
+            if fx:IsA("BloomEffect") and mix > 0.6 then fx.Intensity = math.min(fx.Intensity, 0.4) end
+            if fx:IsA("DepthOfFieldEffect") and mix > 0.5 then fx.Enabled = false end
+            if fx:IsA("BlurEffect") and mix > 0.5 then fx.Size = math.min(fx.Size, 2) end
         end
 
         local cc = EnsureFBColorCorrection()
@@ -311,37 +445,24 @@ function StartFullBright()
     State.Connections.FullBright = RunService.RenderStepped:Connect(function(dt)
         if not State.FullBrightEnabled then return end
         acc += dt
-        if acc >= 0.1 then
-            acc = 0
-            ApplyAdaptiveFullBright()
-        end
+        if acc >= 0.1 then acc = 0 ApplyAdaptiveFullBright() end
     end)
 end
 
 function StopFullBright()
     State.FullBrightEnabled = false
-    if State.Connections.FullBright then
-        State.Connections.FullBright:Disconnect()
-        State.Connections.FullBright = nil
-    end
+    if State.Connections.FullBright then State.Connections.FullBright:Disconnect() State.Connections.FullBright = nil end
     if State.FB_CC then State.FB_CC:Destroy() State.FB_CC = nil end
     local old = Lighting:FindFirstChild("pthub_FB_CC")
     if old then old:Destroy() end
-
     if not State.SavedLighting then return end
     SafePcall(function()
         local s = State.SavedLighting
-        Lighting.Brightness = s.Brightness
-        Lighting.ClockTime = s.ClockTime
-        Lighting.FogEnd = s.FogEnd
-        Lighting.FogStart = s.FogStart
-        Lighting.FogColor = s.FogColor
-        Lighting.GlobalShadows = s.GlobalShadows
-        Lighting.OutdoorAmbient = s.OutdoorAmbient
-        Lighting.Ambient = s.Ambient
-        Lighting.ColorShift_Top = s.ColorShift_Top
-        Lighting.ColorShift_Bottom = s.ColorShift_Bottom
-        Lighting.ExposureCompensation = s.ExposureCompensation
+        Lighting.Brightness = s.Brightness; Lighting.ClockTime = s.ClockTime
+        Lighting.FogEnd = s.FogEnd; Lighting.FogStart = s.FogStart; Lighting.FogColor = s.FogColor
+        Lighting.GlobalShadows = s.GlobalShadows; Lighting.OutdoorAmbient = s.OutdoorAmbient
+        Lighting.Ambient = s.Ambient; Lighting.ColorShift_Top = s.ColorShift_Top
+        Lighting.ColorShift_Bottom = s.ColorShift_Bottom; Lighting.ExposureCompensation = s.ExposureCompensation
         Lighting.EnvironmentDiffuseScale = s.EnvironmentDiffuseScale
         Lighting.EnvironmentSpecularScale = s.EnvironmentSpecularScale
         Lighting.ShadowSoftness = s.ShadowSoftness
@@ -349,9 +470,7 @@ function StopFullBright()
             local fx = entry.Instance
             if fx and fx.Parent then
                 if not fx:IsA("Atmosphere") then fx.Enabled = entry.Enabled end
-                for prop, val in pairs(entry.Props) do
-                    SafePcall(function() fx[prop] = val end)
-                end
+                for prop, val in pairs(entry.Props) do SafePcall(function() fx[prop] = val end) end
             end
         end
     end)
@@ -361,10 +480,7 @@ end
 -- FLY-TO TELEPORT
 -- =========================================================
 local function StopFlyTo()
-    if State.Connections.FlyTo then
-        State.Connections.FlyTo:Disconnect()
-        State.Connections.FlyTo = nil
-    end
+    if State.Connections.FlyTo then State.Connections.FlyTo:Disconnect() State.Connections.FlyTo = nil end
     State.IsTeleporting = false
     State.TeleportTarget = nil
     if State.HRP then
@@ -384,8 +500,8 @@ end
 
 local function FlyToPlayer(targetPlayer)
     if State.IsTeleporting then StopFlyTo() end
-    local localChar, localHum, localHRP = GetCharacter()
-    local targetChar, targetHum, targetHRP = GetCharacter(targetPlayer)
+    local _, localHum, localHRP = GetCharacter()
+    local _, targetHum, targetHRP = GetCharacter(targetPlayer)
     if not localHRP or not localHum or not targetHRP or not targetHum then return end
     if localHum.Health <= 0 or targetHum.Health <= 0 then return end
 
@@ -404,15 +520,12 @@ local function FlyToPlayer(targetPlayer)
         localHRP.AssemblyLinearVelocity = Vector3.zero
     end)
 
-    local arrive = CONFIG.FlyToArriveDist
-    local maxTime = 20
-    local elapsed = 0
-
+    local arrive, maxTime, elapsed = CONFIG.FlyToArriveDist, 20, 0
     if State.Connections.FlyTo then State.Connections.FlyTo:Disconnect() end
     State.Connections.FlyTo = RunService.Heartbeat:Connect(function(dt)
         elapsed += dt
         local _, hum, hrp = GetCharacter()
-        local tChar, tHum, tHRP = GetCharacter(targetPlayer)
+        local _, tHum, tHRP = GetCharacter(targetPlayer)
 
         if not hum or not hrp or hum.Health <= 0 or elapsed > maxTime then
             if not wasNoClip then SetNoClip(false) end
@@ -429,7 +542,6 @@ local function FlyToPlayer(targetPlayer)
         local off = CONFIG.TeleportOffset
         local worldSide = tcf:VectorToWorldSpace(Vector3.new(off.X, 0, off.Z))
         local dest = tcf.Position + worldSide + Vector3.new(0, off.Y, 0)
-
         local pos = hrp.Position
         local delta = dest - pos
         local dist = delta.Magnitude
@@ -441,27 +553,19 @@ local function FlyToPlayer(targetPlayer)
                 hrp.AssemblyLinearVelocity = Vector3.zero
                 hrp.AssemblyAngularVelocity = Vector3.zero
             end)
-            if not wasNoClip then
-                State.NoClipEnabled = false
-                StopNoClip()
-            end
+            if not wasNoClip then State.NoClipEnabled = false StopNoClip() end
             StopFlyTo()
             return
         end
 
         local speed = math.clamp(State.TeleportSpeed, 20, 800)
-        local ease = 1
-        if dist < 30 then ease = math.clamp(dist / 30, 0.25, 1) end
+        local ease = dist < 30 and math.clamp(dist / 30, 0.25, 1) or 1
         local step = math.min(dist, speed * ease * dt)
         local dir = delta.Unit
         hrp.CFrame = CFrame.new(pos + dir * step, pos + dir * step + tcf.LookVector)
         hrp.AssemblyLinearVelocity = dir * speed * ease * 0.35
         hrp.AssemblyAngularVelocity = Vector3.zero
     end)
-end
-
-local function SafeTeleportToPlayer(targetPlayer)
-    FlyToPlayer(targetPlayer)
 end
 
 -- =========================================================
@@ -471,10 +575,8 @@ local function CaptureGraphics()
     SafePcall(function() State.SavedQuality = GameSettings.SavedQualityLevel end)
     if Terrain then
         State.SavedTerrain = {
-            Decoration = Terrain.Decoration,
-            WaterWaveSize = Terrain.WaterWaveSize,
-            WaterWaveSpeed = Terrain.WaterWaveSpeed,
-            WaterReflectance = Terrain.WaterReflectance,
+            Decoration = Terrain.Decoration, WaterWaveSize = Terrain.WaterWaveSize,
+            WaterWaveSpeed = Terrain.WaterWaveSpeed, WaterReflectance = Terrain.WaterReflectance,
             WaterTransparency = Terrain.WaterTransparency,
         }
     end
@@ -500,11 +602,8 @@ function StartFPSBoost()
     end)
     if Terrain then
         SafePcall(function()
-            Terrain.Decoration = false
-            Terrain.WaterWaveSize = 0
-            Terrain.WaterWaveSpeed = 0
-            Terrain.WaterReflectance = 0
-            Terrain.WaterTransparency = 1
+            Terrain.Decoration = false; Terrain.WaterWaveSize = 0; Terrain.WaterWaveSpeed = 0
+            Terrain.WaterReflectance = 0; Terrain.WaterTransparency = 1
         end)
     end
     SafePcall(function()
@@ -635,7 +734,6 @@ end
 local CombatContent = MakeScroll(true, CONFIG.AccentPurple)
 local VisualsContent = MakeScroll(false, CONFIG.AccentTeal)
 
--- // UI BUILDERS
 local layoutOrderCounter = 0
 local function nextOrder() layoutOrderCounter += 1 return layoutOrderCounter end
 
@@ -804,7 +902,7 @@ local function CreateButton(parent, text, color, callback)
 end
 
 -- =========================================================
--- COMBAT
+-- COMBAT TAB
 -- =========================================================
 local speedSection = CreateSection(CombatContent, "⚡ SPEED  —  DRAG SLIDERS")
 CreateToggle(speedSection, "Enable Speed Override", true, function(v) State.SpeedEnabled = v ApplyMovementStats() end)
@@ -886,10 +984,73 @@ CreateButton(aimSection, "SWITCH: Closest / Selected Player", Color3.fromRGB(35,
 end)
 
 -- =========================================================
--- VISUALS
+-- VISUALS TAB  (INVISIBLE LIVES HERE — TOP OF TAB)
 -- =========================================================
-local worldSection = CreateSection(VisualsContent, "☀️ WORLD / PERFORMANCE")
 
+-- ★★★ INVISIBLE / GHOST — FIRST SECTION IN VISUALS ★★★
+local invisSection = CreateSection(VisualsContent, "👻 INVISIBLE / GHOST")
+local invisStatus = Create("TextLabel", {
+    Size = UDim2.new(1, 0, 0, 18), BackgroundTransparency = 1, Text = "Invisible: OFF",
+    TextColor3 = CONFIG.DangerRed, TextSize = 13, Font = Enum.Font.GothamBold,
+    TextXAlignment = Enum.TextXAlignment.Left, LayoutOrder = 1, Parent = invisSection,
+})
+Create("TextLabel", {
+    Size = UDim2.new(1, 0, 0, 16), BackgroundTransparency = 1,
+    Text = "Local ghost — body / fits / particles / nametag wiped",
+    TextColor3 = CONFIG.TextDim, TextSize = 11, Font = Enum.Font.Gotham,
+    TextXAlignment = Enum.TextXAlignment.Left, LayoutOrder = 2, Parent = invisSection,
+})
+
+local invisBtn
+local function SetInvisibleUI(on)
+    SetInvisible(on)
+    if on then
+        invisStatus.Text = "Invisible: ON — you are a damn ghost"
+        invisStatus.TextColor3 = CONFIG.SuccessGreen
+        if invisBtn then
+            invisBtn.Text = "■  DISABLE INVISIBLE"
+            invisBtn.BackgroundColor3 = CONFIG.DangerRed
+        end
+    else
+        invisStatus.Text = "Invisible: OFF"
+        invisStatus.TextColor3 = CONFIG.DangerRed
+        if invisBtn then
+            invisBtn.Text = "👻  ENABLE INVISIBLE"
+            invisBtn.BackgroundColor3 = CONFIG.AccentPurple
+        end
+    end
+end
+
+CreateToggle(invisSection, "Invisible Enabled", false, function(v)
+    SetInvisibleUI(v)
+end)
+CreateToggle(invisSection, "Hide Shadows", true, function(v)
+    CONFIG.InvisibleHideShadow = v
+    if State.InvisibleEnabled then StopInvisible() StartInvisible() end
+end)
+CreateToggle(invisSection, "Hide Name / Health Tag", true, function(v)
+    CONFIG.InvisibleHideNameTag = v
+    if State.InvisibleEnabled then
+        local _, hum = GetCharacter()
+        if v and hum then HideNameTag(hum) elseif hum then RestoreNameTag(hum) end
+    end
+end)
+CreateToggle(invisSection, "Keep Tools Visible", false, function(v)
+    CONFIG.InvisibleKeepTools = v
+    if State.InvisibleEnabled then StopInvisible() StartInvisible() end
+end)
+invisBtn = CreateButton(invisSection, "👻  ENABLE INVISIBLE", CONFIG.AccentPurple, function()
+    SetInvisibleUI(not State.InvisibleEnabled)
+end)
+CreateButton(invisSection, "REAPPLY GHOST SWEEP", Color3.fromRGB(40, 55, 100), function()
+    if State.InvisibleEnabled then
+        local c = LocalPlayer.Character
+        if c then SweepCharacterInvisible(c) end
+    end
+end)
+
+-- WORLD / PERFORMANCE
+local worldSection = CreateSection(VisualsContent, "☀️ WORLD / PERFORMANCE")
 local fbStatus = Create("TextLabel", {
     Size = UDim2.new(1, 0, 0, 18), BackgroundTransparency = 1, Text = "Full Bright: OFF",
     TextColor3 = CONFIG.DangerRed, TextSize = 13, Font = Enum.Font.GothamBold,
@@ -970,32 +1131,26 @@ CreateToggle(espSection, "Global Player ESP", false, function(v)
     if v then StartESP() else StopESP() end
 end)
 
--- =========================================================
--- PLAYERS — REFRESH BUTTON + LIST
--- =========================================================
+-- PLAYERS LIST
 local tpSection = CreateSection(VisualsContent, "PLAYERS — FLY-TO / ESP / AIM")
-
 State.PlayerCountLabel = Create("TextLabel", {
     Size = UDim2.new(1, 0, 0, 18), BackgroundTransparency = 1,
     Text = "Players in server: 0",
     TextColor3 = CONFIG.AccentTeal, TextSize = 13, Font = Enum.Font.GothamBold,
     TextXAlignment = Enum.TextXAlignment.Left, LayoutOrder = 1, Parent = tpSection,
 })
-
 State.RefreshStatusLabel = Create("TextLabel", {
     Size = UDim2.new(1, 0, 0, 16), BackgroundTransparency = 1,
     Text = "List sync: waiting...",
     TextColor3 = CONFIG.TextDim, TextSize = 11, Font = Enum.Font.Gotham,
     TextXAlignment = Enum.TextXAlignment.Left, LayoutOrder = 2, Parent = tpSection,
 })
-
 local PlayerListFrame = Create("Frame", {
     Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y,
     BackgroundTransparency = 1, LayoutOrder = 10, Parent = tpSection,
 })
 Create("UIListLayout", {Padding = UDim.new(0, 6), SortOrder = Enum.SortOrder.LayoutOrder, Parent = PlayerListFrame})
 
--- forward declare
 local RefreshPlayerList
 
 local function UpdatePlayerCountUI(extra)
@@ -1010,9 +1165,7 @@ local function UpdatePlayerCountUI(extra)
         State.RefreshStatusLabel.Text = (extra or "List synced") .. "  •  " .. stamp
         State.RefreshStatusLabel.TextColor3 = CONFIG.SuccessGreen
         task.delay(1.2, function()
-            if State.RefreshStatusLabel then
-                State.RefreshStatusLabel.TextColor3 = CONFIG.TextDim
-            end
+            if State.RefreshStatusLabel then State.RefreshStatusLabel.TextColor3 = CONFIG.TextDim end
         end)
     end
 end
@@ -1023,13 +1176,9 @@ local refreshBtn = CreateButton(tpSection, "🔄  REFRESH PLAYER LIST", CONFIG.A
     btn.BackgroundColor3 = CONFIG.WarningYellow
     RefreshPlayerList(true)
     task.delay(0.25, function()
-        if btn and btn.Parent then
-            btn.Text = oldText
-            btn.BackgroundColor3 = CONFIG.AccentPurple
-        end
+        if btn and btn.Parent then btn.Text = oldText btn.BackgroundColor3 = CONFIG.AccentPurple end
     end)
 end)
--- put refresh near top of section (after labels)
 refreshBtn.LayoutOrder = 3
 
 CreateToggle(tpSection, "Auto-Refresh Players", true, function(v)
@@ -1039,7 +1188,6 @@ CreateToggle(tpSection, "Auto-Refresh Players", true, function(v)
     end
 end)
 
--- ESP helpers
 local function DestroyESPForPlayer(plr)
     local objs = State.ESPObjects[plr]
     if objs and objs.Billboard then objs.Billboard:Destroy() end
@@ -1133,29 +1281,20 @@ local function TogglePlayerESP(plr, btn)
 end
 
 RefreshPlayerList = function(manual)
-    -- wipe old rows
     for _, child in ipairs(PlayerListFrame:GetChildren()) do
         if child:IsA("Frame") then child:Destroy() end
     end
-
-    -- cleanup ESP for players who left
     for plr, _ in pairs(State.ESPObjects) do
-        if not plr.Parent or plr == LocalPlayer then
-            DestroyESPForPlayer(plr)
-        end
+        if not plr.Parent or plr == LocalPlayer then DestroyESPForPlayer(plr) end
     end
 
     local list = Players:GetPlayers()
-    table.sort(list, function(a, b)
-        return string.lower(a.Name) < string.lower(b.Name)
-    end)
+    table.sort(list, function(a, b) return string.lower(a.Name) < string.lower(b.Name) end)
 
     local shown = 0
     for _, plr in ipairs(list) do
         if plr == LocalPlayer then continue end
         shown += 1
-
-        -- if global ESP on, ensure tag exists for new joiners
         if State.ESPEnabled and not State.ESPObjects[plr] then
             CreateESPForPlayer(plr)
             EnsureESPLoop()
@@ -1169,8 +1308,7 @@ RefreshPlayerList = function(manual)
         local display = plr.DisplayName ~= plr.Name and (plr.DisplayName .. " (@" .. plr.Name .. ")") or plr.Name
         Create("TextLabel", {
             Size = UDim2.new(1, -155, 1, 0), Position = UDim2.new(0, 10, 0, 0), BackgroundTransparency = 1,
-            Text = display,
-            TextColor3 = CONFIG.TextWhite, TextSize = 12, Font = Enum.Font.Gotham,
+            Text = display, TextColor3 = CONFIG.TextWhite, TextSize = 12, Font = Enum.Font.Gotham,
             TextXAlignment = Enum.TextXAlignment.Left, TextTruncate = Enum.TextTruncate.AtEnd, Parent = row,
         })
 
@@ -1217,11 +1355,10 @@ RefreshPlayerList = function(manual)
             TextXAlignment = Enum.TextXAlignment.Left, Parent = empty,
         })
     end
-
     UpdatePlayerCountUI(manual and "Manual refresh OK" or "Auto sync OK")
 end
 
--- FLY manual
+-- FLY / NOCLIP
 function StartFly()
     StopFly()
     RefreshCharacter()
@@ -1294,22 +1431,15 @@ function StopNoClip()
     end
 end
 
--- player join/leave instant refresh
 Players.PlayerAdded:Connect(function(plr)
     if State.ESPEnabled then
         task.spawn(function()
             task.wait(0.5)
-            if plr.Parent then
-                CreateESPForPlayer(plr)
-                EnsureESPLoop()
-            end
+            if plr.Parent then CreateESPForPlayer(plr) EnsureESPLoop() end
         end)
     end
-    -- refresh immediately + once more after character can exist
     task.defer(function() RefreshPlayerList(false) end)
-    task.delay(1, function()
-        if plr.Parent then RefreshPlayerList(false) end
-    end)
+    task.delay(1, function() if plr.Parent then RefreshPlayerList(false) end end)
 end)
 
 Players.PlayerRemoving:Connect(function(plr)
@@ -1319,14 +1449,6 @@ Players.PlayerRemoving:Connect(function(plr)
     task.defer(function() RefreshPlayerList(false) end)
 end)
 
--- auto refresh loop (catches weird delayed joins)
-if State.Connections.PlayerAuto then State.Connections.PlayerAuto:Disconnect() end
-State.Connections.PlayerAuto = RunService.Heartbeat:Connect(function()
-    if not CONFIG.AutoRefreshPlayers then return end
-    State._refreshAcc = (State._refreshAcc or 0) + RunService.Heartbeat:Wait()
-end)
-
--- cleaner interval using task.spawn
 task.spawn(function()
     while ScreenGui.Parent do
         task.wait(CONFIG.AutoRefreshInterval)
@@ -1336,7 +1458,6 @@ task.spawn(function()
             if count ~= State.LastPlayerCount then
                 RefreshPlayerList(false)
             else
-                -- still light-touch update count text
                 UpdatePlayerCountUI("Live check")
             end
         end
@@ -1424,6 +1545,12 @@ local function OnCharacterAdded()
     if State.IsTeleporting then StopFlyTo() end
     if State.FlyEnabled then StartFly() end
     if State.NoClipEnabled then StartNoClip() end
+    if State.InvisibleEnabled then
+        task.defer(function()
+            task.wait(0.2)
+            StartInvisible()
+        end)
+    end
     if State.Humanoid then
         State.Humanoid.Died:Connect(function()
             StopFly()
@@ -1464,6 +1591,7 @@ CloseBtn.MouseButton1Click:Connect(function()
     task.delay(0.25, function()
         if State.FullBrightEnabled then StopFullBright() end
         if State.FPSBoostEnabled then StopFPSBoost() end
+        if State.InvisibleEnabled then StopInvisible() end
         StopFlyTo()
         ScreenGui:Destroy()
         StopFly(); StopNoClip(); StopESP()
@@ -1528,4 +1656,4 @@ State.Connections.Stats = RunService.Heartbeat:Connect(function()
     end
 end)
 
-print("[pthub] v" .. CONFIG.Version .. " | Refresh Players + Adaptive FB + FlyTo TP | RightShift")
+print("[pthub] v" .. CONFIG.Version .. " | INVISIBLE top of VISUALS tab | RightShift")
