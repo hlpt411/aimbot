@@ -1,5 +1,6 @@
 -- pthub v2.9.6 | UI REWORK — pure dark / minimal / smooth + circle orb (overlap FIXED)
 -- RightShift = toggle | LocalScript / Executor
+-- *Humanoid:TakeDamage / CanCollide writes are client-side; the server may reject them under FilteringEnabled*
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
@@ -46,7 +47,8 @@ local State = {
 	InfiniteJump = false, SuperJump = false, SuperJumpPower = 120,
 	FlyEnabled = false, FlySpeed = 80, FlyVerticalMult = 1,
 	FlyMode = "Velocity", FlySmooth = true,
-	NoClipEnabled = false, ESPEnabled = false,
+	NoClipEnabled = false, NoClipSaved = {},
+	ESPEnabled = false,
 	AimAssistEnabled = false, AimFOV = 120, AimSmooth = 0.35,
 	AimMode = "Closest", SelectedAimPlayer = nil,
 	FullBrightEnabled = false, FullBrightIntensity = 55,
@@ -625,7 +627,6 @@ local Shadow = Create("ImageLabel", {
 	Parent = Main,
 })
 
--- BODY holds all interactive chrome so minimize never nukes tab state wrong
 local Body = Create("Frame", {
 	Name = "Body",
 	Size = UDim2.fromScale(1, 1),
@@ -634,7 +635,6 @@ local Body = Create("Frame", {
 	Parent = Main,
 })
 
--- HEADER
 local Header = Create("Frame", {
 	Size = UDim2.new(1, 0, 0, 52),
 	BackgroundColor3 = CONFIG.Surface,
@@ -701,7 +701,6 @@ end
 local MinBtn = IconBtn(Header, -78, "—")
 local CloseBtn = IconBtn(Header, -40, "✕", Color3.fromHex("#3f1d1d"))
 
--- ORB
 local Orb = Create("TextButton", {
 	Name = "MinimizeOrb",
 	Size = UDim2.fromOffset(CONFIG.OrbSize, CONFIG.OrbSize),
@@ -777,7 +776,6 @@ task.spawn(function()
 	end
 end)
 
--- TABS
 local TabBar = Create("Frame", {
 	Size = UDim2.new(1, -28, 0, 36),
 	Position = UDim2.fromOffset(14, 62),
@@ -1019,7 +1017,6 @@ local function Btn(parent, text, color, callback)
 	return b
 end
 
--- COMBAT
 local speedSec = Section(CombatContent, "SPEED")
 Toggle(speedSec, "Speed Override", true, function(v) State.SpeedEnabled = v ApplyMovementStats() end)
 Slider(speedSec, "WalkSpeed", 16, 500, 16, function(v) State.WalkSpeed = v ApplyMovementStats() end)
@@ -1096,7 +1093,6 @@ Btn(aimSec, "Closest / Selected", CONFIG.Surface2, function()
 	end
 end)
 
--- VISUALS
 local invisSec = Section(VisualsContent, "INVISIBLE / GHOST")
 local invisStatus = Create("TextLabel", {
 	Size = UDim2.new(1, 0, 0, 14), BackgroundTransparency = 1, Text = "Invisible: OFF",
@@ -1404,7 +1400,6 @@ RefreshPlayerList = function(manual)
 	UpdatePlayerCountUI(manual and "manual ok" or "auto ok")
 end
 
--- FLY / NOCLIP
 function StartFly()
 	StopFly()
 	RefreshCharacter()
@@ -1460,12 +1455,18 @@ end
 
 function StartNoClip()
 	StopNoClip()
+	State.NoClipSaved = {}
 	State.Connections.NoClip = RunService.Stepped:Connect(function()
 		if not State.NoClipEnabled then return end
 		local char = LocalPlayer.Character
 		if not char then return end
 		for _, part in ipairs(char:GetDescendants()) do
-			if part:IsA("BasePart") then part.CanCollide = false end
+			if part:IsA("BasePart") then
+				if State.NoClipSaved[part] == nil then
+					State.NoClipSaved[part] = part.CanCollide
+				end
+				part.CanCollide = false
+			end
 		end
 	end)
 end
@@ -1474,6 +1475,27 @@ function StopNoClip()
 	if State.Connections.NoClip then
 		State.Connections.NoClip:Disconnect()
 		State.Connections.NoClip = nil
+	end
+	local saved = State.NoClipSaved
+	if saved then
+		for part, wasCollidable in pairs(saved) do
+			if part and part.Parent then
+				SafePcall(function()
+					part.CanCollide = wasCollidable
+				end)
+			end
+		end
+	end
+	State.NoClipSaved = {}
+	local char = LocalPlayer.Character
+	if char then
+		for _, part in ipairs(char:GetDescendants()) do
+			if part:IsA("BasePart") and part.Name ~= "HumanoidRootPart" then
+				SafePcall(function()
+					part.CanCollide = true
+				end)
+			end
+		end
 	end
 end
 
@@ -1510,7 +1532,6 @@ task.spawn(function()
 	end
 end)
 
--- AIM
 local FOVCircle = Drawing and Drawing.new("Circle") or nil
 if FOVCircle then
 	FOVCircle.Thickness = 1.2 FOVCircle.NumSides = 64 FOVCircle.Radius = 120
@@ -1588,6 +1609,7 @@ end)
 local function OnCharacterAdded()
 	task.wait(0.15)
 	RefreshCharacter()
+	State.NoClipSaved = {}
 	if State.IsTeleporting then StopFlyTo() end
 	if State.FlyEnabled then StartFly() end
 	if State.NoClipEnabled then StartNoClip() end
@@ -1607,7 +1629,6 @@ end
 if LocalPlayer.Character then OnCharacterAdded() end
 LocalPlayer.CharacterAdded:Connect(OnCharacterAdded)
 
--- drag main
 local draggingUI, dragStart, startPos = false, nil, nil
 Header.InputBegan:Connect(function(input)
 	if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
@@ -1626,7 +1647,6 @@ UserInputService.InputChanged:Connect(function(input)
 	end
 end)
 
--- drag orb
 local draggingOrb, orbDragStart, orbStartPos = false, nil, nil
 Orb.InputBegan:Connect(function(input)
 	if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
@@ -1647,9 +1667,6 @@ UserInputService.InputChanged:Connect(function(input)
 	end
 end)
 
--- =========================
--- TAB APPLY (single source of truth)
--- =========================
 local function applyTab(tabName, refreshList)
 	State.ActiveTab = tabName
 	local combat = tabName == "Combat"
@@ -1674,9 +1691,6 @@ end
 CombatTab.MouseButton1Click:Connect(function() setTab(true) end)
 VisualsTab.MouseButton1Click:Connect(function() setTab(false) end)
 
--- =========================
--- MINIMIZE / RESTORE (no overlap)
--- =========================
 local function getMainCenterAbs()
 	local p = Main.AbsolutePosition
 	local s = Main.AbsoluteSize
@@ -1692,7 +1706,6 @@ local function minimizeToOrb()
 	local center = getMainCenterAbs()
 	local orbPos = UDim2.fromOffset(center.X - CONFIG.OrbSize * 0.5, center.Y - CONFIG.OrbSize * 0.5)
 
-	-- only hide the body wrapper — tabs stay intact underneath
 	Body.Visible = false
 	Shadow.Visible = false
 
@@ -1738,7 +1751,6 @@ local function restoreFromOrb()
 		MainStroke.Thickness = 2
 		MainStroke.Transparency = 0.1
 
-		-- body still hidden until expand finishes a bit
 		Body.Visible = false
 		Shadow.Visible = false
 
@@ -1750,7 +1762,6 @@ local function restoreFromOrb()
 		Tween(MainStroke, {Color = CONFIG.Border, Transparency = 0.35, Thickness = 1}, 0.34)
 
 		task.delay(0.16, function()
-			-- restore ONLY the active tab, never both
 			applyTab(State.ActiveTab or "Combat", false)
 			Body.Visible = true
 			Shadow.Visible = true
@@ -1805,7 +1816,6 @@ CloseBtn.MouseButton1Click:Connect(function()
 	end)
 end)
 
--- open anim
 Main.Size = UDim2.fromOffset(0, 0)
 Main.BackgroundTransparency = 1
 Tween(Main, {Size = UDim2.fromOffset(420, 560), BackgroundTransparency = 0}, 0.38, Enum.EasingStyle.Back)
@@ -1852,4 +1862,4 @@ State.Connections.Stats = RunService.Heartbeat:Connect(function()
 	end
 end)
 
-print("[pthub] v"..CONFIG.Version.." | orb restore fixed | RightShift")
+print("[pthub] v"..CONFIG.Version.." | noclip restore | RightShift")
