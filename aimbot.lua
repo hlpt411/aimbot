@@ -1,4 +1,4 @@
--- pthub v2.9.6 | UI REWORK — pure dark / minimal / smooth + circle orb (overlap FIXED)
+-- pthub v2.9.7 | UI REWORK — pure dark / charcoal / no purple
 -- RightShift = toggle | LocalScript / Executor
 -- *Humanoid:TakeDamage / CanCollide writes are client-side; the server may reject them under FilteringEnabled*
 
@@ -14,18 +14,18 @@ local Camera = workspace.CurrentCamera
 local GameSettings = UserSettings():GetService("UserGameSettings")
 
 local CONFIG = {
-	Version = "2.9.6",
-	Bg = Color3.fromHex("#0a0a0f"),
-	Surface = Color3.fromHex("#12121a"),
-	Surface2 = Color3.fromHex("#1a1a24"),
-	Border = Color3.fromHex("#2a2a38"),
-	Text = Color3.fromHex("#e8e8ed"),
-	TextDim = Color3.fromHex("#6b6b7b"),
-	Accent = Color3.fromHex("#8b5cf6"),
-	AccentDim = Color3.fromHex("#6d28d9"),
-	Good = Color3.fromHex("#22c55e"),
-	Bad = Color3.fromHex("#ef4444"),
-	Warn = Color3.fromHex("#eab308"),
+	Version = "2.9.7",
+	Bg = Color3.fromHex("#080808"),
+	Surface = Color3.fromHex("#111111"),
+	Surface2 = Color3.fromHex("#1a1a1a"),
+	Border = Color3.fromHex("#2c2c2c"),
+	Text = Color3.fromHex("#ececec"),
+	TextDim = Color3.fromHex("#7a7a7a"),
+	Accent = Color3.fromHex("#d4d4d4"),
+	AccentDim = Color3.fromHex("#8a8a8a"),
+	Good = Color3.fromHex("#5a5a5a"),
+	Bad = Color3.fromHex("#3a3a3a"),
+	Warn = Color3.fromHex("#b8b8b8"),
 	AimTeamCheck = true,
 	AimVisibleCheck = true,
 	TeleportOffset = Vector3.new(3.5, 3, 0),
@@ -610,15 +610,15 @@ local Main = Create("Frame", {
 	ClipsDescendants = true,
 	Parent = ScreenGui,
 })
-local MainCorner = Create("UICorner", {CornerRadius = UDim.new(0, 16), Parent = Main})
-local MainStroke = Create("UIStroke", {Color = CONFIG.Border, Thickness = 1, Transparency = 0.35, Parent = Main})
+local MainCorner = Create("UICorner", {CornerRadius = UDim.new(0, 14), Parent = Main})
+local MainStroke = Create("UIStroke", {Color = CONFIG.Border, Thickness = 1, Transparency = 0.2, Parent = Main})
 
 local Shadow = Create("ImageLabel", {
 	Name = "Shadow",
 	BackgroundTransparency = 1,
 	Image = "rbxassetid://6014261993",
 	ImageColor3 = Color3.new(0, 0, 0),
-	ImageTransparency = 0.45,
+	ImageTransparency = 0.35,
 	ScaleType = Enum.ScaleType.Slice,
 	SliceCenter = Rect.new(49, 49, 450, 450),
 	Size = UDim2.new(1, 48, 1, 48),
@@ -641,7 +641,7 @@ local Header = Create("Frame", {
 	BorderSizePixel = 0,
 	Parent = Body,
 })
-Create("UICorner", {CornerRadius = UDim.new(0, 16), Parent = Header})
+Create("UICorner", {CornerRadius = UDim.new(0, 14), Parent = Header})
 Create("Frame", {
 	Size = UDim2.new(1, 0, 0, 18),
 	Position = UDim2.new(0, 0, 1, -18),
@@ -652,9 +652,9 @@ Create("Frame", {
 Create("Frame", {
 	Size = UDim2.new(1, 0, 0, 1),
 	Position = UDim2.new(0, 0, 1, -1),
-	BackgroundColor3 = CONFIG.Accent,
+	BackgroundColor3 = CONFIG.Border,
 	BorderSizePixel = 0,
-	BackgroundTransparency = 0.55,
+	BackgroundTransparency = 0,
 	Parent = Header,
 })
 Create("TextLabel", {
@@ -679,6 +679,7 @@ local Ver = Create("TextLabel", {
 	Parent = Header,
 })
 Create("UICorner", {CornerRadius = UDim.new(0, 6), Parent = Ver})
+Create("UIStroke", {Color = CONFIG.Border, Thickness = 1, Transparency = 0.4, Parent = Ver})
 
 local function IconBtn(parent, x, txt, bg)
 	local b = Create("TextButton", {
@@ -693,13 +694,14 @@ local function IconBtn(parent, x, txt, bg)
 		Parent = parent,
 	})
 	Create("UICorner", {CornerRadius = UDim.new(0, 8), Parent = b})
-	b.MouseEnter:Connect(function() Tween(b, {BackgroundTransparency = 0.15}, 0.15) end)
-	b.MouseLeave:Connect(function() Tween(b, {BackgroundTransparency = 0}, 0.15) end)
+	Create("UIStroke", {Color = CONFIG.Border, Thickness = 1, Transparency = 0.45, Parent = b})
+	b.MouseEnter:Connect(function() Tween(b, {BackgroundColor3 = CONFIG.Border}, 0.15) end)
+	b.MouseLeave:Connect(function() Tween(b, {BackgroundColor3 = bg or CONFIG.Surface2}, 0.15) end)
 	return b
 end
 
 local MinBtn = IconBtn(Header, -78, "—")
-local CloseBtn = IconBtn(Header, -40, "✕", Color3.fromHex("#3f1d1d"))
+local CloseBtn = IconBtn(Header, -40, "✕", Color3.fromHex("#1c1c1c"))
 
 local Orb = Create("TextButton", {
 	Name = "MinimizeOrb",
@@ -715,8 +717,8 @@ local Orb = Create("TextButton", {
 Create("UICorner", {CornerRadius = UDim.new(1, 0), Parent = Orb})
 local OrbStroke = Create("UIStroke", {
 	Color = CONFIG.Accent,
-	Thickness = 2,
-	Transparency = 0.15,
+	Thickness = 1.5,
+	Transparency = 0.25,
 	Parent = Orb,
 })
 Create("ImageLabel", {
@@ -724,7 +726,7 @@ Create("ImageLabel", {
 	BackgroundTransparency = 1,
 	Image = "rbxassetid://6014261993",
 	ImageColor3 = Color3.new(0, 0, 0),
-	ImageTransparency = 0.35,
+	ImageTransparency = 0.28,
 	ScaleType = Enum.ScaleType.Slice,
 	SliceCenter = Rect.new(49, 49, 450, 450),
 	Size = UDim2.new(1, 28, 1, 28),
@@ -745,7 +747,7 @@ local OrbLabel = Create("TextLabel", {
 	Size = UDim2.fromScale(1, 1),
 	BackgroundTransparency = 1,
 	Text = "P",
-	TextColor3 = CONFIG.Accent,
+	TextColor3 = CONFIG.Text,
 	TextSize = 18,
 	Font = Enum.Font.GothamBold,
 	ZIndex = 22,
@@ -754,7 +756,7 @@ local OrbLabel = Create("TextLabel", {
 local OrbGlow = Create("Frame", {
 	Size = UDim2.fromScale(1, 1),
 	BackgroundColor3 = CONFIG.Accent,
-	BackgroundTransparency = 0.88,
+	BackgroundTransparency = 0.92,
 	BorderSizePixel = 0,
 	ZIndex = 20,
 	Parent = Orb,
@@ -764,11 +766,11 @@ Create("UICorner", {CornerRadius = UDim.new(1, 0), Parent = OrbGlow})
 task.spawn(function()
 	while Orb.Parent do
 		if Orb.Visible then
-			Tween(OrbStroke, {Transparency = 0.05, Thickness = 2.4}, 0.9, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut)
-			Tween(OrbGlow, {BackgroundTransparency = 0.82}, 0.9, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut)
+			Tween(OrbStroke, {Transparency = 0.1, Thickness = 2}, 0.9, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut)
+			Tween(OrbGlow, {BackgroundTransparency = 0.86}, 0.9, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut)
 			task.wait(0.95)
-			Tween(OrbStroke, {Transparency = 0.25, Thickness = 1.6}, 0.9, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut)
-			Tween(OrbGlow, {BackgroundTransparency = 0.92}, 0.9, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut)
+			Tween(OrbStroke, {Transparency = 0.35, Thickness = 1.4}, 0.9, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut)
+			Tween(OrbGlow, {BackgroundTransparency = 0.94}, 0.9, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut)
 			task.wait(0.95)
 		else
 			task.wait(0.25)
@@ -784,13 +786,14 @@ local TabBar = Create("Frame", {
 	Parent = Body,
 })
 Create("UICorner", {CornerRadius = UDim.new(0, 10), Parent = TabBar})
+Create("UIStroke", {Color = CONFIG.Border, Thickness = 1, Transparency = 0.35, Parent = TabBar})
 Create("UIPadding", {PaddingLeft = UDim.new(0, 3), PaddingRight = UDim.new(0, 3), PaddingTop = UDim.new(0, 3), PaddingBottom = UDim.new(0, 3), Parent = TabBar})
 Create("UIListLayout", {FillDirection = Enum.FillDirection.Horizontal, Padding = UDim.new(0, 4), Parent = TabBar})
 
 local function MakeTab(text, active)
 	local b = Create("TextButton", {
 		Size = UDim2.new(0.5, -2, 1, 0),
-		BackgroundColor3 = active and CONFIG.Accent or Color3.fromRGB(0, 0, 0),
+		BackgroundColor3 = active and CONFIG.Surface2 or Color3.fromRGB(0, 0, 0),
 		BackgroundTransparency = active and 0 or 1,
 		Text = text,
 		TextColor3 = active and CONFIG.Text or CONFIG.TextDim,
@@ -813,8 +816,8 @@ local function MakeScroll(vis)
 		BackgroundTransparency = 1,
 		BorderSizePixel = 0,
 		ScrollBarThickness = 3,
-		ScrollBarImageColor3 = CONFIG.Accent,
-		ScrollBarImageTransparency = 0.4,
+		ScrollBarImageColor3 = CONFIG.AccentDim,
+		ScrollBarImageTransparency = 0.35,
 		CanvasSize = UDim2.new(0, 0, 0, 0),
 		AutomaticCanvasSize = Enum.AutomaticSize.Y,
 		Visible = vis,
@@ -840,8 +843,8 @@ local function Section(parent, title)
 		LayoutOrder = nextOrder(),
 		Parent = parent,
 	})
-	Create("UICorner", {CornerRadius = UDim.new(0, 12), Parent = s})
-	Create("UIStroke", {Color = CONFIG.Border, Thickness = 1, Transparency = 0.55, Parent = s})
+	Create("UICorner", {CornerRadius = UDim.new(0, 10), Parent = s})
+	Create("UIStroke", {Color = CONFIG.Border, Thickness = 1, Transparency = 0.3, Parent = s})
 	Create("UIPadding", {
 		PaddingTop = UDim.new(0, 12), PaddingBottom = UDim.new(0, 12),
 		PaddingLeft = UDim.new(0, 12), PaddingRight = UDim.new(0, 12), Parent = s,
@@ -885,10 +888,11 @@ local function Toggle(parent, text, default, callback)
 		Parent = holder,
 	})
 	Create("UICorner", {CornerRadius = UDim.new(1, 0), Parent = track})
+	Create("UIStroke", {Color = CONFIG.Border, Thickness = 1, Transparency = 0.4, Parent = track})
 	local knob = Create("Frame", {
 		Size = UDim2.fromOffset(18, 18),
 		Position = default and UDim2.new(1, -21, 0.5, -9) or UDim2.fromOffset(3, 3),
-		BackgroundColor3 = CONFIG.Text,
+		BackgroundColor3 = default and CONFIG.Bg or CONFIG.Text,
 		Parent = track,
 	})
 	Create("UICorner", {CornerRadius = UDim.new(1, 0), Parent = knob})
@@ -896,7 +900,10 @@ local function Toggle(parent, text, default, callback)
 	local hit = Create("TextButton", {Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, Text = "", Parent = holder})
 	local function render()
 		Tween(track, {BackgroundColor3 = on and CONFIG.Accent or CONFIG.Surface2}, 0.18)
-		Tween(knob, {Position = on and UDim2.new(1, -21, 0.5, -9) or UDim2.fromOffset(3, 3)}, 0.18, Enum.EasingStyle.Quint)
+		Tween(knob, {
+			Position = on and UDim2.new(1, -21, 0.5, -9) or UDim2.fromOffset(3, 3),
+			BackgroundColor3 = on and CONFIG.Bg or CONFIG.Text,
+		}, 0.18, Enum.EasingStyle.Quint)
 	end
 	hit.MouseButton1Click:Connect(function()
 		on = not on
@@ -914,7 +921,8 @@ local function Slider(parent, text, min, max, default, callback)
 		LayoutOrder = #parent:GetChildren() + 1,
 		Parent = parent,
 	})
-	Create("UICorner", {CornerRadius = UDim.new(0, 10), Parent = holder})
+	Create("UICorner", {CornerRadius = UDim.new(0, 8), Parent = holder})
+	Create("UIStroke", {Color = CONFIG.Border, Thickness = 1, Transparency = 0.5, Parent = holder})
 	Create("UIPadding", {
 		PaddingTop = UDim.new(0, 8), PaddingBottom = UDim.new(0, 8),
 		PaddingLeft = UDim.new(0, 10), PaddingRight = UDim.new(0, 10), Parent = holder,
@@ -934,7 +942,7 @@ local function Slider(parent, text, min, max, default, callback)
 		Position = UDim2.new(0.7, 0, 0, 0),
 		BackgroundTransparency = 1,
 		Text = tostring(default),
-		TextColor3 = CONFIG.Accent,
+		TextColor3 = CONFIG.Text,
 		TextSize = 12,
 		Font = Enum.Font.GothamBold,
 		TextXAlignment = Enum.TextXAlignment.Right,
@@ -1001,7 +1009,7 @@ end
 local function Btn(parent, text, color, callback)
 	local b = Create("TextButton", {
 		Size = UDim2.new(1, 0, 0, 36),
-		BackgroundColor3 = color or CONFIG.Accent,
+		BackgroundColor3 = color or CONFIG.Surface2,
 		Text = text,
 		TextColor3 = CONFIG.Text,
 		TextSize = 12,
@@ -1010,9 +1018,10 @@ local function Btn(parent, text, color, callback)
 		LayoutOrder = #parent:GetChildren() + 1,
 		Parent = parent,
 	})
-	Create("UICorner", {CornerRadius = UDim.new(0, 9), Parent = b})
-	b.MouseEnter:Connect(function() Tween(b, {BackgroundTransparency = 0.12}, 0.12) end)
-	b.MouseLeave:Connect(function() Tween(b, {BackgroundTransparency = 0}, 0.12) end)
+	Create("UICorner", {CornerRadius = UDim.new(0, 8), Parent = b})
+	Create("UIStroke", {Color = CONFIG.Border, Thickness = 1, Transparency = 0.35, Parent = b})
+	b.MouseEnter:Connect(function() Tween(b, {BackgroundColor3 = CONFIG.Border}, 0.12) end)
+	b.MouseLeave:Connect(function() Tween(b, {BackgroundColor3 = color or CONFIG.Surface2}, 0.12) end)
 	b.MouseButton1Click:Connect(function() if callback then callback(b) end end)
 	return b
 end
@@ -1054,7 +1063,7 @@ end)
 local noclipSec = Section(CombatContent, "NOCLIP")
 local noclipStatus = Create("TextLabel", {
 	Size = UDim2.new(1, 0, 0, 14), BackgroundTransparency = 1, Text = "Status: OFF",
-	TextColor3 = CONFIG.Bad, TextSize = 12, Font = Enum.Font.GothamBold,
+	TextColor3 = CONFIG.TextDim, TextSize = 12, Font = Enum.Font.GothamBold,
 	TextXAlignment = Enum.TextXAlignment.Left, LayoutOrder = 1, Parent = noclipSec,
 })
 function SetNoClip(on)
@@ -1062,18 +1071,18 @@ function SetNoClip(on)
 	if on then
 		StartNoClip()
 		noclipStatus.Text = "Status: ON"
-		noclipStatus.TextColor3 = CONFIG.Good
+		noclipStatus.TextColor3 = CONFIG.Text
 	else
 		StopNoClip()
 		noclipStatus.Text = "Status: OFF"
-		noclipStatus.TextColor3 = CONFIG.Bad
+		noclipStatus.TextColor3 = CONFIG.TextDim
 	end
 end
 Toggle(noclipSec, "NoClip", false, function(v) SetNoClip(v) end)
-Btn(noclipSec, "Toggle NoClip", CONFIG.Accent, function(btn)
+Btn(noclipSec, "Toggle NoClip", CONFIG.Surface2, function(btn)
 	SetNoClip(not State.NoClipEnabled)
 	btn.Text = State.NoClipEnabled and "Disable NoClip" or "Enable NoClip"
-	btn.BackgroundColor3 = State.NoClipEnabled and CONFIG.Bad or CONFIG.Accent
+	btn.BackgroundColor3 = State.NoClipEnabled and CONFIG.Bad or CONFIG.Surface2
 end)
 
 local aimSec = Section(CombatContent, "AIM ASSIST")
@@ -1096,7 +1105,7 @@ end)
 local invisSec = Section(VisualsContent, "INVISIBLE / GHOST")
 local invisStatus = Create("TextLabel", {
 	Size = UDim2.new(1, 0, 0, 14), BackgroundTransparency = 1, Text = "Invisible: OFF",
-	TextColor3 = CONFIG.Bad, TextSize = 12, Font = Enum.Font.GothamBold,
+	TextColor3 = CONFIG.TextDim, TextSize = 12, Font = Enum.Font.GothamBold,
 	TextXAlignment = Enum.TextXAlignment.Left, LayoutOrder = 1, Parent = invisSec,
 })
 local invisBtn
@@ -1104,12 +1113,12 @@ local function SetInvisibleUI(on)
 	SetInvisible(on)
 	if on then
 		invisStatus.Text = "Invisible: ON"
-		invisStatus.TextColor3 = CONFIG.Good
+		invisStatus.TextColor3 = CONFIG.Text
 		if invisBtn then invisBtn.Text = "Disable Invisible" invisBtn.BackgroundColor3 = CONFIG.Bad end
 	else
 		invisStatus.Text = "Invisible: OFF"
-		invisStatus.TextColor3 = CONFIG.Bad
-		if invisBtn then invisBtn.Text = "Enable Invisible" invisBtn.BackgroundColor3 = CONFIG.Accent end
+		invisStatus.TextColor3 = CONFIG.TextDim
+		if invisBtn then invisBtn.Text = "Enable Invisible" invisBtn.BackgroundColor3 = CONFIG.Surface2 end
 	end
 end
 Toggle(invisSec, "Invisible", false, function(v) SetInvisibleUI(v) end)
@@ -1128,7 +1137,7 @@ Toggle(invisSec, "Keep Tools Visible", false, function(v)
 	CONFIG.InvisibleKeepTools = v
 	if State.InvisibleEnabled then StopInvisible() StartInvisible() end
 end)
-invisBtn = Btn(invisSec, "Enable Invisible", CONFIG.Accent, function()
+invisBtn = Btn(invisSec, "Enable Invisible", CONFIG.Surface2, function()
 	SetInvisibleUI(not State.InvisibleEnabled)
 end)
 Btn(invisSec, "Reapply Ghost Sweep", CONFIG.Surface2, function()
@@ -1141,7 +1150,7 @@ end)
 local worldSec = Section(VisualsContent, "WORLD / PERF")
 local fbStatus = Create("TextLabel", {
 	Size = UDim2.new(1, 0, 0, 14), BackgroundTransparency = 1, Text = "Full Bright: OFF",
-	TextColor3 = CONFIG.Bad, TextSize = 12, Font = Enum.Font.GothamBold,
+	TextColor3 = CONFIG.TextDim, TextSize = 12, Font = Enum.Font.GothamBold,
 	TextXAlignment = Enum.TextXAlignment.Left, LayoutOrder = 1, Parent = worldSec,
 })
 local fbBtn
@@ -1149,13 +1158,13 @@ local function SetFullBright(on)
 	if on then
 		StartFullBright()
 		fbStatus.Text = string.format("Full Bright: ON  ·  dark %d%%", math.floor(State.SceneDarkness * 100))
-		fbStatus.TextColor3 = CONFIG.Good
+		fbStatus.TextColor3 = CONFIG.Text
 		if fbBtn then fbBtn.Text = "Disable Full Bright" fbBtn.BackgroundColor3 = CONFIG.Bad end
 	else
 		StopFullBright()
 		fbStatus.Text = "Full Bright: OFF"
-		fbStatus.TextColor3 = CONFIG.Bad
-		if fbBtn then fbBtn.Text = "Enable Full Bright" fbBtn.BackgroundColor3 = CONFIG.Warn end
+		fbStatus.TextColor3 = CONFIG.TextDim
+		if fbBtn then fbBtn.Text = "Enable Full Bright" fbBtn.BackgroundColor3 = CONFIG.Surface2 end
 	end
 end
 Toggle(worldSec, "Full Bright", false, function(v) SetFullBright(v) end)
@@ -1163,13 +1172,13 @@ Slider(worldSec, "Intensity", 0, 100, 55, function(v)
 	State.FullBrightIntensity = v
 	if State.FullBrightEnabled then ApplyAdaptiveFullBright() end
 end)
-fbBtn = Btn(worldSec, "Enable Full Bright", CONFIG.Warn, function()
+fbBtn = Btn(worldSec, "Enable Full Bright", CONFIG.Surface2, function()
 	SetFullBright(not State.FullBrightEnabled)
 end)
 
 local fpsStatus = Create("TextLabel", {
 	Size = UDim2.new(1, 0, 0, 14), BackgroundTransparency = 1, Text = "FPS Boost: OFF",
-	TextColor3 = CONFIG.Bad, TextSize = 12, Font = Enum.Font.GothamBold,
+	TextColor3 = CONFIG.TextDim, TextSize = 12, Font = Enum.Font.GothamBold,
 	TextXAlignment = Enum.TextXAlignment.Left, LayoutOrder = 20, Parent = worldSec,
 })
 local fpsBtn
@@ -1177,17 +1186,17 @@ local function SetFPSBoost(on)
 	if on then
 		StartFPSBoost()
 		fpsStatus.Text = "FPS Boost: ON"
-		fpsStatus.TextColor3 = CONFIG.Good
+		fpsStatus.TextColor3 = CONFIG.Text
 		if fpsBtn then fpsBtn.Text = "Disable FPS Boost" fpsBtn.BackgroundColor3 = CONFIG.Bad end
 	else
 		StopFPSBoost()
 		fpsStatus.Text = "FPS Boost: OFF"
-		fpsStatus.TextColor3 = CONFIG.Bad
-		if fpsBtn then fpsBtn.Text = "Enable FPS Boost" fpsBtn.BackgroundColor3 = CONFIG.Accent end
+		fpsStatus.TextColor3 = CONFIG.TextDim
+		if fpsBtn then fpsBtn.Text = "Enable FPS Boost" fpsBtn.BackgroundColor3 = CONFIG.Surface2 end
 	end
 end
 Toggle(worldSec, "FPS Boost", false, function(v) SetFPSBoost(v) end)
-fpsBtn = Btn(worldSec, "Enable FPS Boost", CONFIG.Accent, function()
+fpsBtn = Btn(worldSec, "Enable FPS Boost", CONFIG.Surface2, function()
 	SetFPSBoost(not State.FPSBoostEnabled)
 end)
 
@@ -1204,7 +1213,7 @@ end)
 local listSec = Section(VisualsContent, "PLAYERS")
 State.PlayerCountLabel = Create("TextLabel", {
 	Size = UDim2.new(1, 0, 0, 14), BackgroundTransparency = 1, Text = "Players: 0",
-	TextColor3 = CONFIG.Accent, TextSize = 12, Font = Enum.Font.GothamBold,
+	TextColor3 = CONFIG.Text, TextSize = 12, Font = Enum.Font.GothamBold,
 	TextXAlignment = Enum.TextXAlignment.Left, LayoutOrder = 1, Parent = listSec,
 })
 State.RefreshStatusLabel = Create("TextLabel", {
@@ -1228,14 +1237,14 @@ local function UpdatePlayerCountUI(extra)
 	end
 	if State.RefreshStatusLabel then
 		State.RefreshStatusLabel.Text = (extra or "synced") .. "  ·  " .. os.date("%H:%M:%S")
-		State.RefreshStatusLabel.TextColor3 = CONFIG.Good
+		State.RefreshStatusLabel.TextColor3 = CONFIG.Text
 		task.delay(1.1, function()
 			if State.RefreshStatusLabel then State.RefreshStatusLabel.TextColor3 = CONFIG.TextDim end
 		end)
 	end
 end
 
-Btn(listSec, "Refresh List", CONFIG.Accent, function(btn)
+Btn(listSec, "Refresh List", CONFIG.Surface2, function(btn)
 	local old = btn.Text
 	btn.Text = "..."
 	RefreshPlayerList(true)
@@ -1275,7 +1284,7 @@ local function CreateESPForPlayer(plr)
 	})
 	Create("UICorner", {CornerRadius = UDim.new(1, 0), Parent = healthBg})
 	local healthFill = Create("Frame", {
-		Size = UDim2.fromScale(1, 1), BackgroundColor3 = CONFIG.Good, BorderSizePixel = 0, Parent = healthBg,
+		Size = UDim2.fromScale(1, 1), BackgroundColor3 = CONFIG.Accent, BorderSizePixel = 0, Parent = healthBg,
 	})
 	Create("UICorner", {CornerRadius = UDim.new(1, 0), Parent = healthFill})
 	local healthText = Create("TextLabel", {
@@ -1308,7 +1317,13 @@ local function EnsureESPLoop()
 					local hpPct = math.clamp(hum.Health / math.max(hum.MaxHealth, 1), 0, 1)
 					objs.HealthFill.Size = UDim2.fromScale(hpPct, 1)
 					objs.HealthText.Text = string.format("%d%%", math.floor(hpPct * 100))
-					objs.HealthFill.BackgroundColor3 = (hpPct > 0.6 and CONFIG.Good) or (hpPct > 0.3 and CONFIG.Warn) or CONFIG.Bad
+					if hpPct > 0.6 then
+						objs.HealthFill.BackgroundColor3 = CONFIG.Accent
+					elseif hpPct > 0.3 then
+						objs.HealthFill.BackgroundColor3 = CONFIG.Warn
+					else
+						objs.HealthFill.BackgroundColor3 = Color3.fromHex("#555555")
+					end
 				end
 			end
 		end
@@ -1333,7 +1348,7 @@ local function TogglePlayerESP(plr, btn)
 		if btn then btn.BackgroundColor3 = CONFIG.Surface2 btn.Text = "ESP" end
 	else
 		CreateESPForPlayer(plr) EnsureESPLoop()
-		if btn then btn.BackgroundColor3 = CONFIG.Good btn.Text = "ON" end
+		if btn then btn.BackgroundColor3 = CONFIG.Accent btn.Text = "ON" btn.TextColor3 = CONFIG.Bg end
 	end
 end
 
@@ -1359,6 +1374,7 @@ RefreshPlayerList = function(manual)
 			Parent = PlayerListFrame,
 		})
 		Create("UICorner", {CornerRadius = UDim.new(0, 8), Parent = row})
+		Create("UIStroke", {Color = CONFIG.Border, Thickness = 1, Transparency = 0.5, Parent = row})
 		local display = plr.DisplayName ~= plr.Name and (plr.DisplayName .. " (@" .. plr.Name .. ")") or plr.Name
 		Create("TextLabel", {
 			Size = UDim2.new(1, -140, 1, 0), Position = UDim2.fromOffset(10, 0), BackgroundTransparency = 1,
@@ -1372,14 +1388,16 @@ RefreshPlayerList = function(manual)
 				TextSize = 10, Font = Enum.Font.GothamBold, AutoButtonColor = false, Parent = row,
 			})
 			Create("UICorner", {CornerRadius = UDim.new(0, 6), Parent = b})
+			Create("UIStroke", {Color = CONFIG.Border, Thickness = 1, Transparency = 0.45, Parent = b})
 			b.MouseButton1Click:Connect(fn)
 			return b
 		end
-		small(-130, "FLY", CONFIG.Accent, function() FlyToPlayer(plr) end)
+		small(-130, "FLY", CONFIG.Surface, function() FlyToPlayer(plr) end)
 		local espOn = State.ESPObjects[plr] ~= nil
-		local espB = small(-88, espOn and "ON" or "ESP", espOn and CONFIG.Good or CONFIG.Surface2, function() end)
+		local espB = small(-88, espOn and "ON" or "ESP", espOn and CONFIG.Accent or CONFIG.Surface, function() end)
+		if espOn then espB.TextColor3 = CONFIG.Bg end
 		espB.MouseButton1Click:Connect(function() TogglePlayerESP(plr, espB) end)
-		small(-46, "AIM", CONFIG.AccentDim, function()
+		small(-46, "AIM", CONFIG.Surface, function()
 			State.SelectedAimPlayer = plr
 			State.AimMode = "Selected"
 			aimModeLab.Text = "Target: " .. plr.Name
@@ -1673,10 +1691,10 @@ local function applyTab(tabName, refreshList)
 	CombatContent.Visible = combat
 	VisualsContent.Visible = not combat
 	CombatTab.BackgroundTransparency = combat and 0 or 1
-	CombatTab.BackgroundColor3 = combat and CONFIG.Accent or CONFIG.Surface
+	CombatTab.BackgroundColor3 = combat and CONFIG.Surface2 or CONFIG.Surface
 	CombatTab.TextColor3 = combat and CONFIG.Text or CONFIG.TextDim
 	VisualsTab.BackgroundTransparency = combat and 1 or 0
-	VisualsTab.BackgroundColor3 = combat and CONFIG.Surface or CONFIG.Accent
+	VisualsTab.BackgroundColor3 = combat and CONFIG.Surface or CONFIG.Surface2
 	VisualsTab.TextColor3 = combat and CONFIG.TextDim or CONFIG.Text
 	if refreshList and not combat then
 		RefreshPlayerList(true)
@@ -1685,8 +1703,8 @@ end
 
 local function setTab(combat)
 	applyTab(combat and "Combat" or "Visuals", true)
-	Tween(CombatTab, {BackgroundTransparency = combat and 0 or 1, BackgroundColor3 = combat and CONFIG.Accent or CONFIG.Surface}, 0.18)
-	Tween(VisualsTab, {BackgroundTransparency = combat and 1 or 0, BackgroundColor3 = combat and CONFIG.Surface or CONFIG.Accent}, 0.18)
+	Tween(CombatTab, {BackgroundTransparency = combat and 0 or 1, BackgroundColor3 = combat and CONFIG.Surface2 or CONFIG.Surface}, 0.18)
+	Tween(VisualsTab, {BackgroundTransparency = combat and 1 or 0, BackgroundColor3 = combat and CONFIG.Surface or CONFIG.Surface2}, 0.18)
 end
 CombatTab.MouseButton1Click:Connect(function() setTab(true) end)
 VisualsTab.MouseButton1Click:Connect(function() setTab(false) end)
@@ -1710,7 +1728,7 @@ local function minimizeToOrb()
 	Shadow.Visible = false
 
 	Tween(MainCorner, {CornerRadius = UDim.new(1, 0)}, 0.28, Enum.EasingStyle.Quint)
-	Tween(MainStroke, {Color = CONFIG.Accent, Transparency = 0.1, Thickness = 2}, 0.28)
+	Tween(MainStroke, {Color = CONFIG.Accent, Transparency = 0.15, Thickness = 1.5}, 0.28)
 	Tween(Main, {
 		Size = UDim2.fromOffset(CONFIG.OrbSize, CONFIG.OrbSize),
 		Position = orbPos,
@@ -1748,8 +1766,8 @@ local function restoreFromOrb()
 		Main.Position = startPos
 		MainCorner.CornerRadius = UDim.new(1, 0)
 		MainStroke.Color = CONFIG.Accent
-		MainStroke.Thickness = 2
-		MainStroke.Transparency = 0.1
+		MainStroke.Thickness = 1.5
+		MainStroke.Transparency = 0.15
 
 		Body.Visible = false
 		Shadow.Visible = false
@@ -1758,8 +1776,8 @@ local function restoreFromOrb()
 			Size = UDim2.fromOffset(420, 560),
 			Position = targetPos,
 		}, 0.34, Enum.EasingStyle.Quint)
-		Tween(MainCorner, {CornerRadius = UDim.new(0, 16)}, 0.34, Enum.EasingStyle.Quint)
-		Tween(MainStroke, {Color = CONFIG.Border, Transparency = 0.35, Thickness = 1}, 0.34)
+		Tween(MainCorner, {CornerRadius = UDim.new(0, 14)}, 0.34, Enum.EasingStyle.Quint)
+		Tween(MainStroke, {Color = CONFIG.Border, Transparency = 0.2, Thickness = 1}, 0.34)
 
 		task.delay(0.16, function()
 			applyTab(State.ActiveTab or "Combat", false)
@@ -1862,4 +1880,4 @@ State.Connections.Stats = RunService.Heartbeat:Connect(function()
 	end
 end)
 
-print("[pthub] v"..CONFIG.Version.." | noclip restore | RightShift")
+print("[pthub] v"..CONFIG.Version.." | pure dark | RightShift")
