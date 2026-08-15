@@ -48,7 +48,7 @@ local State = {
 	FlyEnabled = false, FlySpeed = 80, FlyVerticalMult = 1,
 	FlyMode = "Velocity", FlySmooth = true,
 	NoClipEnabled = false, NoClipSaved = {},
-	ESPEnabled = false,
+	ESPEnabled = false, ESPEnemies = false, ESPAllies = false,
 	AimAssistEnabled = false, AimFOV = 120, AimSmooth = 0.35,
 	AimMode = "Closest", SelectedAimPlayer = nil,
 	FullBrightEnabled = false, FullBrightIntensity = 55,
@@ -64,6 +64,12 @@ local State = {
 	LastPlayerCount = 0, PlayerCountLabel = nil, RefreshStatusLabel = nil,
 	SavedMainPos = nil,
 	AnimLock = false,
+}
+
+local ESPTheme = {
+	Enemies = {Accent = Color3.fromHex("#d4d4d4"), Warn = Color3.fromHex("#b8b8b8"), Bad = Color3.fromHex("#555555")},
+	Allies = {Accent = Color3.fromHex("#6fa8dc"), Warn = Color3.fromHex("#8b8b8b"), Bad = Color3.fromHex("#3d3d3d")},
+	Global = {Accent = Color3.fromHex("#ececec"), Warn = Color3.fromHex("#b8b8b8"), Bad = Color3.fromHex("#555555")},
 }
 
 local function SafePcall(fn, ...) local ok, res = pcall(fn, ...) return ok, res end
@@ -587,6 +593,170 @@ function StopFPSBoost()
 			Terrain.WaterReflectance = State.SavedTerrain.WaterReflectance
 			Terrain.WaterTransparency = State.SavedTerrain.WaterTransparency
 		end)
+	end
+end
+
+-- =========================================================
+-- ESP ENGINE — ENEMY / ALLY / GLOBAL
+-- =========================================================
+local function IsAlly(plr)
+	if not CONFIG.AimTeamCheck then return false end
+	if plr.Team and LocalPlayer.Team and plr.Team == LocalPlayer.Team then return true end
+	if plr.TeamColor and LocalPlayer.TeamColor and plr.TeamColor == LocalPlayer.TeamColor then return true end
+	return false
+end
+
+local function IsEnemy(plr)
+	return not IsAlly(plr)
+end
+
+local function PlayerShouldRenderESP(plr)
+	if plr == LocalPlayer then return false end
+	if State.ESPEnabled then return true end
+	if State.ESPAllies and IsAlly(plr) then return true end
+	if State.ESPEnemies and IsEnemy(plr) then return true end
+	return false
+end
+
+local function ESPThemeFor(plr)
+	if State.ESPEnabled then return ESPTheme.Global end
+	if IsAlly(plr) then return ESPTheme.Allies end
+	return ESPTheme.Enemies
+end
+
+local function DestroyESPForPlayer(plr)
+	local objs = State.ESPObjects[plr]
+	if objs and objs.Billboard then objs.Billboard:Destroy() end
+	State.ESPObjects[plr] = nil
+end
+
+local function CreateESPForPlayer(plr)
+	if State.ESPObjects[plr] then return end
+	if plr == LocalPlayer then return end
+	local theme = ESPThemeFor(plr)
+	local billboard = Create("BillboardGui", {
+		Name = "pthub_ESP_" .. plr.Name, Size = UDim2.fromOffset(180, 58),
+		StudsOffset = Vector3.new(0, 3.1, 0), AlwaysOnTop = true, MaxDistance = 5000, Parent = CoreGui,
+	})
+	local box = Create("Frame", {Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, Parent = billboard})
+	Create("TextLabel", {
+		Size = UDim2.new(1, -54, 0, 16), BackgroundTransparency = 1, Text = plr.Name,
+		TextColor3 = CONFIG.Text, TextSize = 13, Font = Enum.Font.GothamBold,
+		TextStrokeTransparency = 0.5, Parent = box,
+	})
+	local typeTag = Create("TextLabel", {
+		Size = UDim2.fromOffset(52, 12), Position = UDim2.new(1, -52, 0, 0),
+		BackgroundTransparency = 1, Text = (theme == ESPTheme.Global) and "GLOBAL" or ((theme == ESPTheme.Allies) and "ALLY" or "ENEMY"),
+		TextColor3 = theme.Accent, TextSize = 9, Font = Enum.Font.GothamBold,
+		TextXAlignment = Enum.TextXAlignment.Right, Parent = box,
+	})
+	local distTag = Create("TextLabel", {
+		Size = UDim2.new(1, 0, 0, 12), Position = UDim2.fromOffset(0, 16), BackgroundTransparency = 1,
+		Text = "0m", TextColor3 = theme.Accent, TextSize = 11, Font = Enum.Font.Gotham, Parent = box,
+	})
+	local healthBg = Create("Frame", {
+		Size = UDim2.new(0.75, 0, 0, 4), Position = UDim2.new(0.125, 0, 0, 34),
+		BackgroundColor3 = CONFIG.Surface2, BorderSizePixel = 0, Parent = box,
+	})
+	Create("UICorner", {CornerRadius = UDim.new(1, 0), Parent = healthBg})
+	local healthFill = Create("Frame", {
+		Size = UDim2.fromScale(1, 1), BackgroundColor3 = theme.Accent, BorderSizePixel = 0, Parent = healthBg,
+	})
+	Create("UICorner", {CornerRadius = UDim.new(1, 0), Parent = healthFill})
+	local healthText = Create("TextLabel", {
+		Size = UDim2.new(1, 0, 0, 12), Position = UDim2.fromOffset(0, 40), BackgroundTransparency = 1,
+		Text = "100%", TextColor3 = CONFIG.TextDim, TextSize = 10, Font = Enum.Font.Gotham, Parent = box,
+	})
+	State.ESPObjects[plr] = {
+		Billboard = billboard, DistTag = distTag, HealthFill = healthFill,
+		HealthText = healthText, Theme = theme, TypeTag = typeTag,
+	}
+	local function adorn()
+		local head = plr.Character and plr.Character:FindFirstChild("Head")
+		if head then billboard.Adornee = head end
+	end
+	adorn()
+	plr.CharacterAdded:Connect(adorn)
+end
+
+local function EnsureESPLoop()
+	if State.Connections.ESP then return end
+	State.Connections.ESP = RunService.RenderStepped:Connect(function()
+		local localHRP = State.HRP or (LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart"))
+		for plr, objs in pairs(State.ESPObjects) do
+			if not plr.Parent or not plr.Character or not objs.Billboard then
+				DestroyESPForPlayer(plr)
+				continue
+			end
+			if not PlayerShouldRenderESP(plr) then
+				DestroyESPForPlayer(plr)
+				continue
+			end
+			local newTheme = ESPThemeFor(plr)
+			if newTheme ~= objs.Theme then
+				DestroyESPForPlayer(plr)
+				CreateESPForPlayer(plr)
+				continue
+			end
+			local hum = plr.Character:FindFirstChildOfClass("Humanoid")
+			local hrp = plr.Character:FindFirstChild("HumanoidRootPart")
+			local head = plr.Character:FindFirstChild("Head")
+			if hum and hrp and head then
+				objs.Billboard.Adornee = head
+				if localHRP then
+					objs.DistTag.Text = string.format("%dm", math.floor((localHRP.Position - hrp.Position).Magnitude))
+				end
+				local hpPct = math.clamp(hum.Health / math.max(hum.MaxHealth, 1), 0, 1)
+				objs.HealthFill.Size = UDim2.fromScale(hpPct, 1)
+				objs.HealthText.Text = string.format("%d%%", math.floor(hpPct * 100))
+				if hpPct > 0.6 then
+					objs.HealthFill.BackgroundColor3 = objs.Theme.Accent
+				elseif hpPct > 0.3 then
+					objs.HealthFill.BackgroundColor3 = objs.Theme.Warn
+				else
+					objs.HealthFill.BackgroundColor3 = objs.Theme.Bad
+				end
+			end
+		end
+	end)
+end
+
+local function SyncESPFor(playerList)
+	for _, plr in ipairs(playerList or Players:GetPlayers()) do
+		if plr == LocalPlayer then
+			DestroyESPForPlayer(plr)
+			continue
+		end
+		if PlayerShouldRenderESP(plr) then
+			if not State.ESPObjects[plr] then
+				CreateESPForPlayer(plr)
+			end
+		else
+			DestroyESPForPlayer(plr)
+		end
+	end
+	if State.ESPEnabled or State.ESPAllies or State.ESPEnemies then
+		EnsureESPLoop()
+	end
+end
+
+function StartESP()
+	SyncESPFor()
+end
+
+function StopESP()
+	for plr in pairs(State.ESPObjects) do DestroyESPForPlayer(plr) end
+	if State.Connections.ESP then State.Connections.ESP:Disconnect() State.Connections.ESP = nil end
+end
+
+local function TogglePlayerESP(plr, btn)
+	if plr == LocalPlayer then return end
+	if State.ESPObjects[plr] then
+		DestroyESPForPlayer(plr)
+		if btn then btn.BackgroundColor3 = CONFIG.Surface2 btn.Text = "ESP" btn.TextColor3 = CONFIG.Text end
+	else
+		CreateESPForPlayer(plr) EnsureESPLoop()
+		if btn then btn.BackgroundColor3 = CONFIG.Accent btn.Text = "ON" btn.TextColor3 = CONFIG.Bg end
 	end
 end
 
@@ -1205,9 +1375,22 @@ Slider(tpSec, "Fly-To Speed", 30, 600, 120, function(v) State.TeleportSpeed = v 
 Btn(tpSec, "Cancel Fly-To", CONFIG.Bad, function() if State.IsTeleporting then StopFlyTo() end end)
 
 local espSec = Section(VisualsContent, "ESP")
-Toggle(espSec, "Global Player ESP", false, function(v)
+Toggle(espSec, "Ally ESP", false, function(v)
+	State.ESPAllies = v
+	SyncESPFor()
+end)
+Toggle(espSec, "Enemy ESP", false, function(v)
+	State.ESPEnemies = v
+	SyncESPFor()
+end)
+Toggle(espSec, "Global Players ESP", false, function(v)
 	State.ESPEnabled = v
-	if v then StartESP() else StopESP() end
+	if v then
+		State.ESPAllies = false
+		State.ESPEnemies = false
+		for _, t in ipairs({}) do end
+	end
+	SyncESPFor()
 end)
 
 local listSec = Section(VisualsContent, "PLAYERS")
@@ -1256,108 +1439,12 @@ Toggle(listSec, "Auto-Refresh", true, function(v)
 	if State.RefreshStatusLabel then State.RefreshStatusLabel.Text = v and "auto on" or "auto off" end
 end)
 
-local function DestroyESPForPlayer(plr)
-	local objs = State.ESPObjects[plr]
-	if objs and objs.Billboard then objs.Billboard:Destroy() end
-	State.ESPObjects[plr] = nil
-end
-
-local function CreateESPForPlayer(plr)
-	if State.ESPObjects[plr] then return end
-	local billboard = Create("BillboardGui", {
-		Name = "pthub_ESP_" .. plr.Name, Size = UDim2.fromOffset(180, 58),
-		StudsOffset = Vector3.new(0, 3.1, 0), AlwaysOnTop = true, MaxDistance = 5000, Parent = CoreGui,
-	})
-	local box = Create("Frame", {Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, Parent = billboard})
-	Create("TextLabel", {
-		Size = UDim2.new(1, 0, 0, 16), BackgroundTransparency = 1, Text = plr.Name,
-		TextColor3 = CONFIG.Text, TextSize = 13, Font = Enum.Font.GothamBold,
-		TextStrokeTransparency = 0.5, Parent = box,
-	})
-	local distTag = Create("TextLabel", {
-		Size = UDim2.new(1, 0, 0, 12), Position = UDim2.fromOffset(0, 16), BackgroundTransparency = 1,
-		Text = "0m", TextColor3 = CONFIG.Accent, TextSize = 11, Font = Enum.Font.Gotham, Parent = box,
-	})
-	local healthBg = Create("Frame", {
-		Size = UDim2.new(0.75, 0, 0, 4), Position = UDim2.new(0.125, 0, 0, 34),
-		BackgroundColor3 = CONFIG.Surface2, BorderSizePixel = 0, Parent = box,
-	})
-	Create("UICorner", {CornerRadius = UDim.new(1, 0), Parent = healthBg})
-	local healthFill = Create("Frame", {
-		Size = UDim2.fromScale(1, 1), BackgroundColor3 = CONFIG.Accent, BorderSizePixel = 0, Parent = healthBg,
-	})
-	Create("UICorner", {CornerRadius = UDim.new(1, 0), Parent = healthFill})
-	local healthText = Create("TextLabel", {
-		Size = UDim2.new(1, 0, 0, 12), Position = UDim2.fromOffset(0, 40), BackgroundTransparency = 1,
-		Text = "100%", TextColor3 = CONFIG.TextDim, TextSize = 10, Font = Enum.Font.Gotham, Parent = box,
-	})
-	State.ESPObjects[plr] = {Billboard = billboard, DistTag = distTag, HealthFill = healthFill, HealthText = healthText}
-	local function adorn()
-		local head = plr.Character and plr.Character:FindFirstChild("Head")
-		if head then billboard.Adornee = head end
-	end
-	adorn()
-	plr.CharacterAdded:Connect(adorn)
-end
-
-local function EnsureESPLoop()
-	if State.Connections.ESP then return end
-	State.Connections.ESP = RunService.RenderStepped:Connect(function()
-		local localHRP = State.HRP or (LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart"))
-		for plr, objs in pairs(State.ESPObjects) do
-			if plr.Parent and plr.Character and objs.Billboard then
-				local hum = plr.Character:FindFirstChildOfClass("Humanoid")
-				local hrp = plr.Character:FindFirstChild("HumanoidRootPart")
-				local head = plr.Character:FindFirstChild("Head")
-				if hum and hrp and head then
-					objs.Billboard.Adornee = head
-					if localHRP then
-						objs.DistTag.Text = string.format("%dm", math.floor((localHRP.Position - hrp.Position).Magnitude))
-					end
-					local hpPct = math.clamp(hum.Health / math.max(hum.MaxHealth, 1), 0, 1)
-					objs.HealthFill.Size = UDim2.fromScale(hpPct, 1)
-					objs.HealthText.Text = string.format("%d%%", math.floor(hpPct * 100))
-					if hpPct > 0.6 then
-						objs.HealthFill.BackgroundColor3 = CONFIG.Accent
-					elseif hpPct > 0.3 then
-						objs.HealthFill.BackgroundColor3 = CONFIG.Warn
-					else
-						objs.HealthFill.BackgroundColor3 = Color3.fromHex("#555555")
-					end
-				end
-			end
-		end
-	end)
-end
-
-function StartESP()
-	for _, plr in ipairs(Players:GetPlayers()) do
-		if plr ~= LocalPlayer then CreateESPForPlayer(plr) end
-	end
-	EnsureESPLoop()
-end
-
-function StopESP()
-	for plr in pairs(State.ESPObjects) do DestroyESPForPlayer(plr) end
-	if State.Connections.ESP then State.Connections.ESP:Disconnect() State.Connections.ESP = nil end
-end
-
-local function TogglePlayerESP(plr, btn)
-	if State.ESPObjects[plr] then
-		DestroyESPForPlayer(plr)
-		if btn then btn.BackgroundColor3 = CONFIG.Surface2 btn.Text = "ESP" end
-	else
-		CreateESPForPlayer(plr) EnsureESPLoop()
-		if btn then btn.BackgroundColor3 = CONFIG.Accent btn.Text = "ON" btn.TextColor3 = CONFIG.Bg end
-	end
-end
-
 RefreshPlayerList = function(manual)
 	for _, child in ipairs(PlayerListFrame:GetChildren()) do
 		if child:IsA("Frame") then child:Destroy() end
 	end
 	for plr, _ in pairs(State.ESPObjects) do
-		if not plr.Parent or plr == LocalPlayer then DestroyESPForPlayer(plr) end
+		if not plr.Parent then DestroyESPForPlayer(plr) end
 	end
 	local list = Players:GetPlayers()
 	table.sort(list, function(a, b) return string.lower(a.Name) < string.lower(b.Name) end)
@@ -1365,9 +1452,6 @@ RefreshPlayerList = function(manual)
 	for _, plr in ipairs(list) do
 		if plr == LocalPlayer then continue end
 		shown += 1
-		if State.ESPEnabled and not State.ESPObjects[plr] then
-			CreateESPForPlayer(plr) EnsureESPLoop()
-		end
 		local row = Create("Frame", {
 			Size = UDim2.new(1, 0, 0, 38),
 			BackgroundColor3 = CONFIG.Surface2,
@@ -1415,6 +1499,7 @@ RefreshPlayerList = function(manual)
 			TextXAlignment = Enum.TextXAlignment.Left, Parent = empty,
 		})
 	end
+	SyncESPFor(list)
 	UpdatePlayerCountUI(manual and "manual ok" or "auto ok")
 end
 
@@ -1518,12 +1603,12 @@ function StopNoClip()
 end
 
 Players.PlayerAdded:Connect(function(plr)
-	if State.ESPEnabled then
-		task.spawn(function()
-			task.wait(0.5)
-			if plr.Parent then CreateESPForPlayer(plr) EnsureESPLoop() end
-		end)
-	end
+	task.spawn(function()
+		task.wait(0.5)
+		if plr.Parent and plr ~= LocalPlayer then
+			SyncESPFor({plr})
+		end
+	end)
 	task.defer(function() RefreshPlayerList(false) end)
 	task.delay(1, function() if plr.Parent then RefreshPlayerList(false) end end)
 end)
